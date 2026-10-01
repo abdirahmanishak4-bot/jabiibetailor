@@ -1,7 +1,8 @@
 FROM php:8.2-apache
 
-# Disable conflicting Apache MPM modules (prefork and mpm_prefork may both be enabled)
-RUN a2dismod mpm_prefork || true && a2enmod mpm_prefork
+# Disable all conflicting Apache MPM modules to prevent "More than one MPM loaded" error
+RUN a2dismod mpm_event mpm_worker mpm_prefork || true && \
+    a2enmod mpm_prefork
 
 # Install PDO MySQL and MySQLi extensions
 RUN docker-php-ext-install pdo pdo_mysql mysqli
