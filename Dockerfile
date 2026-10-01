@@ -1,5 +1,8 @@
 FROM php:8.2-apache
 
+# Disable conflicting Apache MPM modules (prefork and mpm_prefork may both be enabled)
+RUN a2dismod mpm_prefork || true && a2enmod mpm_prefork
+
 # Install PDO MySQL and MySQLi extensions
 RUN docker-php-ext-install pdo pdo_mysql mysqli
 
@@ -20,3 +23,4 @@ EXPOSE 80
 
 # Configure Apache port dynamically at runtime using Railway $PORT and start Apache
 CMD sh -c "sed -i \"s/Listen 80/Listen \${PORT:-80}/g\" /etc/apache2/ports.conf && sed -i \"s/<VirtualHost \*:80>/<VirtualHost \*:\${PORT:-80}>/g\" /etc/apache2/sites-available/000-default.conf && apache2-foreground"
+
