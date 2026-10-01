@@ -1,0 +1,8 @@
+.git
+.gitignore
+*.docx
+*.zip
+*.url
+*.log
+jabiibetailor/
+tailor/

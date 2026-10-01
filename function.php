@@ -6,35 +6,73 @@ $dbuser = "osaru_tech";
 $dbpass = "Sr123Th24"; */
 
 
-$baseurl = "http://localhost/tailor/";	
-$dbname = "tailor";
-$dbhost = "localhost";
-$dbuser = "root";
-$dbpass = "";
+$dbhost = getenv('MYSQLHOST') ?: "localhost";
+$dbport = getenv('MYSQLPORT') ?: "3306";
+$dbname = getenv('MYSQLDATABASE') ?: "tailor";
+$dbuser = getenv('MYSQLUSER') ?: "root";
+$dbpass = getenv('MYSQLPASSWORD') !== false ? getenv('MYSQLPASSWORD') : "";
 
+// If MYSQL_URL or DATABASE_URL is set, parse it
+$dburl = getenv('MYSQL_URL') ?: getenv('DATABASE_URL');
+if (!empty($dburl)) {
+	$parsed = parse_url($dburl);
+	if ($parsed) {
+		if (!empty($parsed['host'])) $dbhost = $parsed['host'];
+		if (!empty($parsed['port'])) $dbport = $parsed['port'];
+		if (!empty($parsed['user'])) $dbuser = $parsed['user'];
+		if (isset($parsed['pass']))  $dbpass = $parsed['pass'];
+		if (!empty($parsed['path'])) $dbname = ltrim($parsed['path'], '/');
+	}
+}
+
+// Auto-detect baseurl
+$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+$protocol = $isHttps ? "https" : "http";
+$host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+$baseurl = $protocol . "://" . $host . "/";
 
 error_reporting(E_ALL);
 function connectdb()
 {
-    global $dbname, $dbuser, $dbhost, $dbpass;
-    $conms = @mysql_connect($dbhost,$dbuser,$dbpass); //connect mysql
-	mysql_set_charset('utf8', $conms);
+    global $dbname, $dbuser, $dbhost, $dbpass, $dbport;
+    $conms = @mysqli_connect($dbhost, $dbuser, $dbpass, $dbname, (int)$dbport);
     if(!$conms) return false;
-    $condb = @mysql_select_db($dbname);
-    if(!$condb) return false;
+    mysqli_set_charset($conms, 'utf8');
     return true;
 }
 
-
-
 function dbconnect()
 {
-	global $pdo;
+	global $pdo, $dbhost, $dbport, $dbname, $dbuser, $dbpass;
 
 	try {
-		$pdo = new PDO('mysql:host='.$GLOBALS['dbhost'].';dbname='.$GLOBALS['dbname'].'', $GLOBALS['dbuser'], $GLOBALS['dbpass']);
+		$dsn = 'mysql:host='.$dbhost.';port='.$dbport.';dbname='.$dbname.';charset=utf8';
+		$pdo = new PDO($dsn, $dbuser, $dbpass, [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::MYSQL_ATTR_MULTI_STATEMENTS => true,
+		]);
+		
+		// Auto-create tables from tailor.sql if users table is not yet present
+		init_database_if_needed();
 	} catch (PDOException $e) {
 		die('MySQL connection fail! ' . $e->getMessage());
+	}
+}
+
+function init_database_if_needed()
+{
+	global $pdo;
+	try {
+		$check = $pdo->query("SHOW TABLES LIKE 'users'");
+		if ($check && $check->rowCount() == 0) {
+			$sqlFile = __DIR__ . '/tailor.sql';
+			if (file_exists($sqlFile)) {
+				$sql = file_get_contents($sqlFile);
+				$pdo->exec($sql);
+			}
+		}
+	} catch (Exception $e) {
+		// Ignore if tables exist
 	}
 }
 
